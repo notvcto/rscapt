@@ -324,12 +324,18 @@ async fn run_ffmpeg_job(
         "Spawning ffmpeg"
     );
 
-    let mut child = Command::new("ffmpeg")
-        .args(&args)
+    #[allow(unused_mut)]
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(&args)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut child = cmd.spawn()?;
 
     let stderr = child.stderr.take().unwrap();
     handle.lock().await.child = Some(child);

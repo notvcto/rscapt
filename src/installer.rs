@@ -125,15 +125,20 @@ fn ps_str(s: &str) -> String {
 }
 
 fn run_ps(script: &str) -> Result<()> {
-    let output = std::process::Command::new("powershell")
-        .args([
-            "-WindowStyle",    "Hidden",
-            "-NonInteractive",
-            "-NoProfile",
-            "-Command",        script,
-        ])
-        .output()
-        .context("spawning PowerShell")?;
+    #[allow(unused_mut)]
+    let mut cmd = std::process::Command::new("powershell");
+    cmd.args([
+        "-WindowStyle",    "Hidden",
+        "-NonInteractive",
+        "-NoProfile",
+        "-Command",        script,
+    ]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let output = cmd.output().context("spawning PowerShell")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

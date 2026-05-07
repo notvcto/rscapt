@@ -321,6 +321,7 @@ async fn handle_share_key(
 fn copy_to_clipboard(text: &str) {
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
         let safe = text.replace('\'', "''");
         let _ = std::process::Command::new("powershell")
             .args([
@@ -329,6 +330,7 @@ fn copy_to_clipboard(text: &str) {
                 "-NoProfile",
                 "-Command", &format!("Set-Clipboard -Value '{safe}'"),
             ])
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
             .spawn();
     }
     #[cfg(not(windows))]
