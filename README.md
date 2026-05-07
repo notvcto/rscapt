@@ -37,6 +37,18 @@
 
 ---
 
+## Prerequisites
+
+**ffmpeg** must be installed and available in your PATH. The easiest way:
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+Then open a new terminal and verify with `ffmpeg -version`. That's it — no manual PATH editing needed.
+
+---
+
 ## Getting Started
 
 ### Download
@@ -156,6 +168,7 @@ rscapt tui           Open the clip manager TUI
 rscapt setup         Re-run the setup wizard
 rscapt install       Create Start Menu shortcut + register autostart
 rscapt uninstall     Remove shortcuts, autostart, and PATH entry
+rscapt update        Check for updates and install if a newer version is available
 ```
 
 ---

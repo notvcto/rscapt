@@ -672,21 +672,26 @@ fn draw_confirm(f: &mut Frame, state: &mut State, area: Rect) {
         Line::from(""),
     ];
 
+    lines.push(Line::from(Span::styled(
+        "  ⚠  ffmpeg required: winget install Gyan.FFmpeg",
+        Style::default().fg(Color::Yellow),
+    )));
+
     if state.obs_radio == 1 {
         lines.push(Line::from(Span::styled(
-            "  ⚠  Enable the replay buffer in OBS: Settings → Output → Replay Buffer",
+            "  ⚠  Enable replay buffer in OBS: Settings → Output → Replay Buffer",
             Style::default().fg(Color::Yellow),
         )));
-        lines.push(Line::from(""));
     }
 
+    lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  Press Enter to install.",
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
     )));
 
-    // Row offset shifts by 2 if the replay buffer reminder is shown
-    let install_row = area.y + 8 + if state.obs_radio == 1 { 2 } else { 0 };
+    // Row offset: +1 for ffmpeg line, +1 more if replay buffer reminder is shown
+    let install_row = area.y + 9 + if state.obs_radio == 1 { 1 } else { 0 };
     if install_row < area.y + area.height {
         state.hit.next = Some(Rect { x: area.x, y: install_row, width: area.width, height: 1 });
     }
