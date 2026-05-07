@@ -49,8 +49,8 @@ enum Command {
     Tray,
 }
 
-/// Attach to the parent console (or allocate a new one) for commands that
-/// print plain-text output. No-op on non-Windows.
+/// Attach to the parent console for commands that print plain-text output.
+/// No-op on non-Windows.
 #[cfg(windows)]
 fn attach_console() {
     use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
@@ -62,6 +62,35 @@ fn attach_console() {
 }
 #[cfg(not(windows))]
 fn attach_console() {}
+
+/// If there is no parent console (launched from Start Menu / shortcut),
+/// re-launch this process inside Windows Terminal for proper Unicode rendering.
+/// Returns true if re-launch succeeded — caller should exit immediately.
+/// Falls back to a plain AllocConsole if wt.exe is not available.
+#[cfg(windows)]
+fn relaunch_in_wt_if_needed() -> bool {
+    use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
+    unsafe {
+        if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
+            return false; // already running inside a terminal
+        }
+    }
+    // No parent console — try Windows Terminal (--window new forces a separate window)
+    let args: Vec<String> = std::env::args().collect();
+    let ok = std::process::Command::new("wt.exe")
+        .arg("--window").arg("new")
+        .args(&args)
+        .spawn()
+        .is_ok();
+    if ok {
+        return true;
+    }
+    // wt.exe not available — fall back to legacy console
+    unsafe { AllocConsole(); }
+    false
+}
+#[cfg(not(windows))]
+fn relaunch_in_wt_if_needed() -> bool { false }
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -93,7 +122,10 @@ async fn main() -> Result<()> {
 
     match cli.command.unwrap_or(Command::Daemon) {
         Command::Daemon    => daemon::run(config).await,
-        Command::Tui       => { attach_console(); tui::run(&config).await }
+        Command::Tui       => {
+            if relaunch_in_wt_if_needed() { return Ok(()); }
+            tui::run(&config).await
+        }
         Command::Setup     => { attach_console(); run_wizard() }
         Command::Install   => { attach_console(); installer::install()?; Ok(()) }
         Command::Uninstall => { attach_console(); installer::uninstall()?; Ok(()) }
