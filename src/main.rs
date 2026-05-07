@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
 
     match cli.command.unwrap_or(Command::Daemon) {
         Command::Daemon    => daemon::run(config).await,
-        Command::Tui       => tui::run(&config).await,
+        Command::Tui       => { attach_console(); tui::run(&config).await }
         Command::Setup     => { attach_console(); run_wizard() }
         Command::Install   => { attach_console(); installer::install()?; Ok(()) }
         Command::Uninstall => { attach_console(); installer::uninstall()?; Ok(()) }
