@@ -55,6 +55,8 @@ Then open a new terminal and verify with `ffmpeg -version`. That's it — no man
 
 Grab the latest `rscapt-vX.Y.Z-windows-x64.exe` from the [Releases](https://github.com/notvcto/rscapt/releases) page.
 
+> **Windows SmartScreen warning:** Because rscapt is not code-signed, Windows will show a "Windows protected your PC" warning on first run. Click **More info → Run anyway** to proceed. This is normal for open-source tools without a paid signing certificate — the exe is built transparently from this repo via GitHub Actions.
+
 ### First run
 
 Double-click the exe. The setup wizard opens and walks you through:
