@@ -661,7 +661,7 @@ fn draw_confirm(f: &mut Frame, state: &mut State, area: Rect) {
     let check = Span::styled("  ✓  ", Style::default().fg(Color::Green));
     let key_style = Style::default().fg(Color::DarkGray);
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(Span::styled("  Ready to install.", Style::default().add_modifier(Modifier::BOLD))),
         Line::from(""),
         Line::from(vec![check.clone(), Span::styled("OBS:        ", key_style), Span::raw(&obs_label)]),
@@ -670,13 +670,23 @@ fn draw_confirm(f: &mut Frame, state: &mut State, area: Rect) {
         Line::from(vec![check.clone(), Span::styled("Capture:    ", key_style), Span::raw(source_label)]),
         Line::from(vec![check.clone(), Span::styled("Autostart:  ", key_style), Span::raw(autostart_label)]),
         Line::from(""),
-        Line::from(Span::styled(
-            "  Press Enter to install.",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-        )),
     ];
-    // Row 8 = "Press Enter to install" line
-    let install_row = area.y + 8;
+
+    if state.obs_radio == 1 {
+        lines.push(Line::from(Span::styled(
+            "  ⚠  Enable the replay buffer in OBS: Settings → Output → Replay Buffer",
+            Style::default().fg(Color::Yellow),
+        )));
+        lines.push(Line::from(""));
+    }
+
+    lines.push(Line::from(Span::styled(
+        "  Press Enter to install.",
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+    )));
+
+    // Row offset shifts by 2 if the replay buffer reminder is shown
+    let install_row = area.y + 8 + if state.obs_radio == 1 { 2 } else { 0 };
     if install_row < area.y + area.height {
         state.hit.next = Some(Rect { x: area.x, y: install_row, width: area.width, height: 1 });
     }

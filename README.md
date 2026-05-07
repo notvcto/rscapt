@@ -55,6 +55,8 @@ Double-click the exe. The setup wizard opens and walks you through:
 
 After the wizard completes, run `rscapt daemon` to start processing immediately (or log out and back in if you enabled autostart).
 
+> **Existing OBS users:** rscapt never touches your scenes or settings. It only listens for replay buffer saves. Make sure the replay buffer is enabled in OBS under **Settings → Output → Replay Buffer**, and that it's running before you try to save a clip. The downloaded/managed OBS instance has this configured and started automatically.
+
 ### Open the TUI
 
 ```
