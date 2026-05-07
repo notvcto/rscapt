@@ -104,7 +104,8 @@ pub async fn download_and_swap(release: &ReleaseInfo) -> Result<()> {
     let src = tmp.to_string_lossy().replace('\'', "''");
     let dst = dest_exe.to_string_lossy().replace('\'', "''");
     let script = format!(
-        "Start-Sleep -Seconds 2; \
+        "Stop-Process -Name rscapt -Force -ErrorAction SilentlyContinue; \
+         Start-Sleep -Seconds 2; \
          Copy-Item -Force '{src}' '{dst}'; \
          Remove-Item '{src}' -ErrorAction SilentlyContinue"
     );

@@ -28,7 +28,9 @@ pub async fn upload(path: &Path) -> Result<UploadResult> {
     let part = reqwest::multipart::Part::stream(body).file_name(filename);
     let form = reqwest::multipart::Form::new().part("file", part);
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .user_agent(format!("rscapt/{}", env!("CARGO_PKG_VERSION")))
+        .build()?;
     let response = client
         .post("https://0x0.st")
         .multipart(form)
@@ -63,7 +65,9 @@ pub async fn upload(path: &Path) -> Result<UploadResult> {
 
 /// Delete a previously uploaded file using its deletion token.
 pub async fn delete(url: &str, token: &str) -> Result<()> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .user_agent(format!("rscapt/{}", env!("CARGO_PKG_VERSION")))
+        .build()?;
     let response = client
         .post(url)
         .form(&[("token", token), ("delete", "")])

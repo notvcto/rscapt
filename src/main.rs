@@ -12,6 +12,7 @@ mod processor;
 mod queue;
 mod setup;
 mod share;
+mod tray;
 mod tui;
 mod updater;
 mod wizard;
@@ -42,6 +43,8 @@ enum Command {
     Uninstall,
     /// Check for updates and install if a newer version is available
     Update,
+    /// Run as a system tray icon (autostart entry point)
+    Tray,
 }
 
 #[tokio::main]
@@ -78,6 +81,7 @@ async fn main() -> Result<()> {
         Command::Install   => { installer::install()?; Ok(()) }
         Command::Uninstall => { installer::uninstall()?; Ok(()) }
         Command::Update    => updater::run_update().await,
+        Command::Tray      => tray::run(config.ipc_port),
     }
 }
 

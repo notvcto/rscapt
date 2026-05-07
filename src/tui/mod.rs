@@ -17,6 +17,7 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 pub async fn run(config: &Config) -> Result<()> {
+    maybe_start_daemon(config.ipc_port);
     let (client, cmd_client) = wait_for_daemon(config.ipc_port).await?;
 
     let (msg_tx, mut msg_rx) = mpsc::channel::<ServerMessage>(64);
@@ -53,6 +54,30 @@ pub async fn run(config: &Config) -> Result<()> {
     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
 
     result
+}
+
+/// If the daemon isn't listening yet, spawn it as a detached background process.
+/// The caller's `wait_for_daemon` loop will handle the rest.
+fn maybe_start_daemon(port: u16) {
+    // Quick synchronous probe — if something is already listening, do nothing.
+    if std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else { return };
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let _ = std::process::Command::new(exe)
+            .arg("daemon")
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new(exe).arg("daemon").spawn();
+    }
 }
 
 async fn wait_for_daemon(port: u16) -> Result<(IpcClient, IpcClient)> {

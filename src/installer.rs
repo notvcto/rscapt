@@ -28,16 +28,14 @@ pub fn install() -> Result<()> {
         println!("[install] Binary already at install location — skipping copy");
     }
 
-    // VBS silent launcher so the daemon starts without a visible console window
-    let vbs_path = install_dir.join("daemon-launch.vbs");
-    write_vbs_launcher(&dest_exe, &vbs_path)?;
-    println!("[install] Silent launcher → {}", vbs_path.display());
+    let vbs_path = write_vbs_launcher(&install_dir)
+        .context("writing VBS launcher")?;
 
     run_ps(&install_ps_script(&dest_exe, &vbs_path, &install_dir))
         .context("running PowerShell install script")?;
 
     println!("[install] Start Menu shortcut created");
-    println!("[install] Autostart registered (daemon will start silently on next login)");
+    println!("[install] Autostart registered (rscapt tray will start silently on next login)");
     println!("[install] {} added to user PATH", install_dir.display());
     println!();
     println!("Done. Log out and back in, or run `rscapt daemon` now to start immediately.");
@@ -78,30 +76,32 @@ fn install_dir() -> PathBuf {
         .join("rscapt")
 }
 
-// ── VBS launcher ──────────────────────────────────────────────────────────────
+// ── VBS silent launcher ───────────────────────────────────────────────────────
 
-/// Write a one-liner VBS that launches the daemon with no visible window.
-/// `WScript.Shell.Run` with window style 0 = fully hidden.
-fn write_vbs_launcher(exe: &Path, vbs: &Path) -> Result<()> {
-    let exe_str = exe.to_string_lossy();
+/// Write a VBS file that launches `rscapt tray` with no visible window.
+/// Returns the path to the written file.
+fn write_vbs_launcher(dir: &Path) -> Result<PathBuf> {
+    let vbs_path = dir.join("rscapt-start.vbs");
+    let exe_path = dir.join("rscapt.exe");
+    // Escape any embedded quotes in the path (extremely rare but correct)
+    let exe_str = exe_path.to_string_lossy().replace('"', "\"\"");
     let content = format!(
-        r#"CreateObject("WScript.Shell").Run Chr(34) & "{exe}" & Chr(34) & " daemon", 0, False"#,
-        exe = exe_str
+        "CreateObject(\"WScript.Shell\").Run \"\"\"{exe_str}\"\" tray\", 0, False\n"
     );
-    std::fs::write(vbs, content).context("writing VBS launcher")?;
-    Ok(())
+    std::fs::write(&vbs_path, &content).context("writing VBS launcher")?;
+    Ok(vbs_path)
 }
 
 // ── PowerShell scripts ────────────────────────────────────────────────────────
 
 fn install_ps_script(exe: &Path, vbs: &Path, install_dir: &Path) -> String {
-    let exe  = ps_str(exe.to_string_lossy().as_ref());
-    let vbs  = ps_str(vbs.to_string_lossy().as_ref());
-    let dir  = ps_str(install_dir.to_string_lossy().as_ref());
+    let exe = ps_str(exe.to_string_lossy().as_ref());
+    let vbs = ps_str(vbs.to_string_lossy().as_ref());
+    let dir = ps_str(install_dir.to_string_lossy().as_ref());
 
     format!(
         r#"
-# ── Start Menu shortcut (TUI) ──────────────────────────────────────────────────
+# ── Start Menu shortcut (TUI) ─────────────────────────────────────────────────
 $shell = New-Object -ComObject WScript.Shell
 $lnk   = $shell.CreateShortcut(
     "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\rscapt.lnk"
@@ -112,7 +112,7 @@ $lnk.Description  = 'rscapt — OBS replay clip processor'
 $lnk.IconLocation = '{exe},0'
 $lnk.Save()
 
-# ── Autostart: daemon runs silently via VBS wrapper on login ───────────────────
+# ── Autostart: silent tray on login via VBS (no console flash) ────────────────
 Set-ItemProperty `
     -Path  'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' `
     -Name  'rscapt' `

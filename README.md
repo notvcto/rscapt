@@ -167,6 +167,7 @@ Config is stored at `%APPDATA%\rscapt\config.json`. All fields are set by the wi
 rscapt               First-run wizard (if no config) or start daemon
 rscapt daemon        Start the background clip processor
 rscapt tui           Open the clip manager TUI
+rscapt tray          Start as a system tray icon (autostart entry point)
 rscapt setup         Re-run the setup wizard
 rscapt install       Create Start Menu shortcut + register autostart
 rscapt uninstall     Remove shortcuts, autostart, and PATH entry
