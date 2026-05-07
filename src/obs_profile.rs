@@ -8,6 +8,39 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
+// ── Existing OBS WebSocket detection ─────────────────────────────────────────
+
+/// Config extracted from a pre-existing OBS WebSocket installation.
+#[derive(Debug, Clone)]
+pub struct ObsWebSocketConfig {
+    pub port: u16,
+    pub password: String,
+}
+
+/// Read the WebSocket config from an existing OBS installation at
+/// `%APPDATA%\obs-studio\plugin_config\obs-websocket\config.json`.
+/// Returns `None` if the file is absent or WebSocket is disabled.
+pub fn read_existing_websocket_config() -> Option<ObsWebSocketConfig> {
+    let path = dirs::config_dir()?
+        .join("obs-studio")
+        .join("plugin_config")
+        .join("obs-websocket")
+        .join("config.json");
+
+    let text = std::fs::read_to_string(&path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+
+    // Respect the server_enabled flag — don't claim it's configured if disabled
+    if v["server_enabled"].as_bool() == Some(false) {
+        return None;
+    }
+
+    let port = v["server_port"].as_u64().unwrap_or(4455) as u16;
+    let password = v["server_password"].as_str().unwrap_or("").to_owned();
+
+    Some(ObsWebSocketConfig { port, password })
+}
+
 const PROFILE_NAME: &str = "rscapt";
 const SCENE_NAME: &str = "rscapt";
 

@@ -140,6 +140,9 @@ async fn handle_server_message(app: &mut App, msg: ServerMessage, _cmd_client: &
         ServerMessage::ClipLibrary { clips } | ServerMessage::ClipUpdated { clips } => {
             app.set_clips(clips);
         }
+        ServerMessage::UpdateAvailable { version } => {
+            app.update_available = Some(version);
+        }
         ServerMessage::Cancelled { .. } => {}
         ServerMessage::Error { message } => {
             tracing::warn!("Daemon error: {message}");

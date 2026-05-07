@@ -170,6 +170,8 @@ pub struct App {
     pub clip_list: ListState,
     pub modal: Modal,
     pub hit: HitRects,
+    /// Set when the daemon reports a newer version is available.
+    pub update_available: Option<String>,
 }
 
 impl App {
@@ -182,6 +184,7 @@ impl App {
             clip_list: ListState::default(),
             modal: Modal::None,
             hit: HitRects::default(),
+            update_available: None,
         }
     }
 
@@ -496,6 +499,24 @@ impl App {
     }
 
     fn draw_help(&self, frame: &mut Frame, area: Rect) {
+        // If an update is available, show it in the help bar (overrides modal hints
+        // only in normal mode — modal hints still show when a modal is open).
+        if let (Some(version), Modal::None) = (&self.update_available, &self.modal) {
+            let line = Line::from(vec![
+                Span::styled(
+                    format!("  Update available: {version} — run "),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::styled(
+                    "rscapt update",
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("   q: quit", Style::default().fg(Color::DarkGray)),
+            ]);
+            frame.render_widget(Paragraph::new(line), area);
+            return;
+        }
+
         let help = match &self.modal {
             Modal::None => {
                 if self.focus == Focus::Jobs {
@@ -505,11 +526,13 @@ impl App {
                 }
             }
             Modal::PostProcess(_) => "  ↑/↓: navigate   Space: toggle   ←/→: adjust value   Enter: apply   Esc: cancel",
-            Modal::Compress(_) => "  ↑/↓: fields   ←/→: change codec/quality   type: trim time   Enter: queue   Esc: cancel",
-            Modal::Share(_) => "  Enter: upload   Esc: cancel",
+            Modal::Compress(_)    => "  ↑/↓: fields   ←/→: change codec/quality   type: trim time   Enter: queue   Esc: cancel",
+            Modal::Share(_)       => "  Enter: upload   Esc: cancel",
         };
-        let p = Paragraph::new(help).style(Style::default().fg(Color::DarkGray));
-        frame.render_widget(p, area);
+        frame.render_widget(
+            Paragraph::new(help).style(Style::default().fg(Color::DarkGray)),
+            area,
+        );
     }
 
     // ── PostProcess modal ─────────────────────────────────────────────────────

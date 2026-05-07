@@ -31,7 +31,6 @@ use std::io;
 enum Step {
     Welcome,
     ObsChoice,
-    ObsPath,      // only when user chose "existing"
     OutputDir,
     BufferDuration,
     CaptureSource,
@@ -51,14 +50,13 @@ impl Step {
 
     fn label(self) -> &'static str {
         match self {
-            Step::Welcome      => "Welcome",
-            Step::ObsChoice    => "OBS",
-            Step::ObsPath      => "OBS Path",
-            Step::OutputDir    => "Output",
+            Step::Welcome        => "Welcome",
+            Step::ObsChoice      => "OBS",
+            Step::OutputDir      => "Output",
             Step::BufferDuration => "Buffer",
-            Step::CaptureSource => "Capture",
-            Step::Autostart    => "Autostart",
-            Step::Confirm      => "Confirm",
+            Step::CaptureSource  => "Capture",
+            Step::Autostart      => "Autostart",
+            Step::Confirm        => "Confirm",
         }
     }
 }
@@ -78,7 +76,6 @@ struct State {
     step: Step,
     // OBS
     obs_radio: usize,       // 0=download, 1=existing, 2=skip
-    obs_path: String,
     obs_detected: Option<String>,
     // Output dir
     output_dir: String,
@@ -113,7 +110,6 @@ impl State {
         Self {
             step: Step::Welcome,
             obs_radio,
-            obs_path: detected.clone().unwrap_or_default(),
             obs_detected: detected,
             output_dir,
             buffer_secs: 30,
@@ -127,16 +123,13 @@ impl State {
 
     fn next_step(&mut self) {
         self.step = match self.step {
-            Step::Welcome       => Step::ObsChoice,
-            Step::ObsChoice     => {
-                if self.obs_radio == 1 { Step::ObsPath } else { Step::OutputDir }
-            }
-            Step::ObsPath       => Step::OutputDir,
-            Step::OutputDir     => Step::BufferDuration,
+            Step::Welcome        => Step::ObsChoice,
+            Step::ObsChoice      => Step::OutputDir,
+            Step::OutputDir      => Step::BufferDuration,
             Step::BufferDuration => Step::CaptureSource,
-            Step::CaptureSource => Step::Autostart,
-            Step::Autostart     => Step::Confirm,
-            Step::Confirm       => Step::Confirm, // handled by run()
+            Step::CaptureSource  => Step::Autostart,
+            Step::Autostart      => Step::Confirm,
+            Step::Confirm        => Step::Confirm, // handled by run()
         };
         self.cursor = 0;
         self.error = None;
@@ -144,16 +137,13 @@ impl State {
 
     fn prev_step(&mut self) {
         self.step = match self.step {
-            Step::Welcome       => Step::Welcome,
-            Step::ObsChoice     => Step::Welcome,
-            Step::ObsPath       => Step::ObsChoice,
-            Step::OutputDir     => {
-                if self.obs_radio == 1 { Step::ObsPath } else { Step::ObsChoice }
-            }
+            Step::Welcome        => Step::Welcome,
+            Step::ObsChoice      => Step::Welcome,
+            Step::OutputDir      => Step::ObsChoice,
             Step::BufferDuration => Step::OutputDir,
-            Step::CaptureSource => Step::BufferDuration,
-            Step::Autostart     => Step::CaptureSource,
-            Step::Confirm       => Step::Autostart,
+            Step::CaptureSource  => Step::BufferDuration,
+            Step::Autostart      => Step::CaptureSource,
+            Step::Confirm        => Step::Autostart,
         };
         self.cursor = 0;
         self.error = None;
@@ -161,7 +151,7 @@ impl State {
 
     fn to_options(&self) -> SetupOptions {
         let obs = match self.obs_radio {
-            1 => ObsChoice::Existing(self.obs_path.clone()),
+            1 => ObsChoice::Existing,
             2 => ObsChoice::Skip,
             _ => ObsChoice::Download,
         };
@@ -175,13 +165,10 @@ impl State {
     }
 
     fn visible_steps(&self) -> Vec<Step> {
-        let mut steps = vec![Step::ObsChoice];
-        if self.obs_radio == 1 { steps.push(Step::ObsPath); }
-        steps.extend_from_slice(&[
-            Step::OutputDir, Step::BufferDuration, Step::CaptureSource,
-            Step::Autostart, Step::Confirm,
-        ]);
-        steps
+        vec![
+            Step::ObsChoice, Step::OutputDir, Step::BufferDuration,
+            Step::CaptureSource, Step::Autostart, Step::Confirm,
+        ]
     }
 
     fn step_index(&self) -> (usize, usize) {
@@ -310,39 +297,8 @@ fn handle_key(state: &mut State, code: KeyCode) -> KeyAction {
         Step::ObsChoice => match code {
             KeyCode::Up | KeyCode::Char('k')   => { if state.obs_radio > 0 { state.obs_radio -= 1; } KeyAction::None }
             KeyCode::Down | KeyCode::Char('j') => { if state.obs_radio < 2 { state.obs_radio += 1; } KeyAction::None }
-            KeyCode::Enter | KeyCode::Right    => {
-                // If switching away from "existing", reset path to detected
-                if state.obs_radio != 1 {
-                    state.obs_path = state.obs_detected.clone().unwrap_or_default();
-                }
-                KeyAction::Next
-            }
+            KeyCode::Enter | KeyCode::Right    => KeyAction::Next,
             KeyCode::Left  => KeyAction::Prev,
-            KeyCode::Char('q') | KeyCode::Esc => KeyAction::Quit,
-            _ => KeyAction::None,
-        },
-
-        Step::ObsPath => match code {
-            KeyCode::Char(c) => { state.obs_path.insert(state.cursor, c); state.cursor += 1; KeyAction::None }
-            KeyCode::Backspace => {
-                if state.cursor > 0 {
-                    state.cursor -= 1;
-                    state.obs_path.remove(state.cursor);
-                }
-                KeyAction::None
-            }
-            KeyCode::Left  => { if state.cursor > 0 { state.cursor -= 1; } KeyAction::None }
-            KeyCode::Right if state.cursor < state.obs_path.len() => { state.cursor += 1; KeyAction::None }
-            KeyCode::Enter => {
-                if state.obs_path.trim().is_empty() {
-                    state.error = Some("Please enter a path to obs64.exe.".into());
-                    KeyAction::None
-                } else {
-                    KeyAction::Next
-                }
-            }
-            KeyCode::Right => KeyAction::Next,
-            KeyCode::Up    => KeyAction::Prev,
             KeyCode::Char('q') | KeyCode::Esc => KeyAction::Quit,
             _ => KeyAction::None,
         },
@@ -492,7 +448,6 @@ fn draw_content(f: &mut Frame, state: &mut State, area: Rect) {
     match state.step {
         Step::Welcome        => draw_welcome(f, state, content_area),
         Step::ObsChoice      => draw_obs_choice(f, state, content_area),
-        Step::ObsPath        => draw_obs_path(f, state, content_area),
         Step::OutputDir      => draw_output_dir(f, state, content_area),
         Step::BufferDuration => draw_buffer(f, state, content_area),
         Step::CaptureSource  => draw_capture(f, state, content_area),
@@ -553,12 +508,16 @@ fn draw_obs_choice(f: &mut Frame, state: &mut State, area: Rect) {
     // Radio options start at row offset 4 (header + blank + question + blank)
     let radio_start = area.y + 4;
     for i in 0..3usize {
-        // Each option is 3 lines tall (label + sub + blank)
         let y = radio_start + (i as u16) * 3;
         if y < area.y + area.height {
             state.hit.radio[i] = Some(Rect { x: area.x, y, width: area.width, height: 2 });
         }
     }
+
+    let existing_sub = match &state.obs_detected {
+        Some(_) => "WebSocket port and password will be read from your OBS config automatically",
+        None    => "OBS not found — will use default port 4455 with no auth",
+    };
 
     let mut lines = vec![
         Line::from(Span::styled(&detected_line, Style::default().fg(Color::DarkGray))),
@@ -567,39 +526,10 @@ fn draw_obs_choice(f: &mut Frame, state: &mut State, area: Rect) {
         Line::from(""),
     ];
     lines.extend(radio(0, "Download OBS automatically", "~250 MB, placed in %LOCALAPPDATA%\\rscapt\\obs"));
-    lines.extend(radio(1, "I already have OBS installed", "you'll confirm or enter the path on the next screen"));
+    lines.extend(radio(1, "I already have OBS installed", existing_sub));
     lines.extend(radio(2, "Skip for now", "set obs_exe_path in config.json later"));
 
     f.render_widget(Paragraph::new(lines), area);
-}
-
-fn draw_obs_path(f: &mut Frame, state: &mut State, area: Rect) {
-    let display = format!("{}_", &state.obs_path);
-    let truncated = if state.obs_path.len() > 60 {
-        format!("...{}", &state.obs_path[state.obs_path.len() - 57..])
-    } else {
-        display
-    };
-
-    let lines = vec![
-        Line::from("  Path to obs64.exe"),
-        Line::from(""),
-        Line::from(Span::styled("  (The wizard tried to detect it above. Edit if wrong.)",
-            Style::default().fg(Color::DarkGray))),
-        Line::from(""),
-        Line::from(vec![
-            Span::raw("  "),
-            Span::styled(&truncated, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]),
-    ];
-    if let Some(err) = &state.error {
-        let mut l = lines.clone();
-        l.push(Line::from(""));
-        l.push(Line::from(Span::styled(format!("  ✗ {err}"), Style::default().fg(Color::Red))));
-        f.render_widget(Paragraph::new(l), area);
-    } else {
-        f.render_widget(Paragraph::new(lines), area);
-    }
 }
 
 fn draw_output_dir(f: &mut Frame, state: &mut State, area: Rect) {
@@ -717,9 +647,12 @@ fn draw_autostart(f: &mut Frame, state: &mut State, area: Rect) {
 }
 
 fn draw_confirm(f: &mut Frame, state: &mut State, area: Rect) {
-    let obs_label = match state.obs_radio {
+    let obs_label: String = match state.obs_radio {
         0 => "Download OBS automatically".into(),
-        1 => format!("Use existing OBS at {}", state.obs_path),
+        1 => match &state.obs_detected {
+            Some(p) => format!("Use existing OBS (detected at {})", p),
+            None    => "Use existing OBS (will auto-detect WebSocket config)".into(),
+        },
         _ => "Skip OBS management".into(),
     };
     let source_label = if state.capture_radio == 1 { "Display Capture" } else { "Game Capture" };
@@ -754,8 +687,7 @@ fn draw_help(f: &mut Frame, state: &State, area: Rect) {
     let text = match state.step {
         Step::Welcome        => "  Enter: begin   q: quit",
         Step::ObsChoice      => "  ↑/↓: select   Enter/→: next   q: quit",
-        Step::ObsPath        => "  type path   Enter: next   ↑/Esc: back   q: quit",
-        Step::OutputDir      => "  type folder   Enter: next   ↑/Esc: back",
+        Step::OutputDir      => "  type folder   Enter: next   ←: back",
         Step::BufferDuration => "  ↑/↓: adjust   Enter: next   ←: back",
         Step::CaptureSource  => "  ↑/↓: select   Enter/→: next   ←: back",
         Step::Autostart      => "  ↑/↓/Space: toggle   Enter: next   ←: back",

@@ -13,6 +13,7 @@ mod queue;
 mod setup;
 mod share;
 mod tui;
+mod updater;
 mod wizard;
 
 use anyhow::Result;
@@ -39,6 +40,8 @@ enum Command {
     Install,
     /// Uninstall: remove shortcuts, autostart, and PATH entry
     Uninstall,
+    /// Check for updates and install if a newer version is available
+    Update,
 }
 
 #[tokio::main]
@@ -74,6 +77,7 @@ async fn main() -> Result<()> {
         Command::Setup     => run_wizard(),
         Command::Install   => { installer::install()?; Ok(()) }
         Command::Uninstall => { installer::uninstall()?; Ok(()) }
+        Command::Update    => updater::run_update().await,
     }
 }
 

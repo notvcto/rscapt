@@ -8,6 +8,7 @@ use crate::{
     obs_profile,
     processor,
     queue::{Queue, QueueEvent},
+    updater,
 };
 use anyhow::Result;
 use std::{path::PathBuf, sync::Arc};
@@ -26,13 +27,31 @@ pub async fn run(config: Config) -> Result<()> {
 
     let queue = Queue::new();
 
+    // ── Update check (background, non-blocking) ───────────────────────────────
+    let (update_tx, update_rx) = tokio::sync::watch::channel::<Option<String>>(None);
+    let update_tx = Arc::new(update_tx);
+    {
+        let tx = update_tx.clone();
+        tokio::spawn(async move {
+            match updater::check_latest().await {
+                Ok(Some(rel)) => {
+                    info!(version = %rel.version, "Update available");
+                    let _ = tx.send(Some(rel.version));
+                }
+                Ok(None) => info!("rscapt is up to date"),
+                Err(e)   => warn!(error = %e, "Update check failed"),
+            }
+        });
+    }
+
     info!(ipc_port = config.ipc_port, "Starting IPC server");
     {
         let q = queue.clone();
         let c = clips.clone();
         let port = config.ipc_port;
+        let urx = update_rx;
         tokio::spawn(async move {
-            if let Err(e) = ipc::serve(port, q, c).await {
+            if let Err(e) = ipc::serve(port, q, c, urx).await {
                 error!("IPC server died: {e}");
             }
         });
@@ -60,19 +79,22 @@ pub async fn run(config: Config) -> Result<()> {
         });
     }
 
-    // Launch OBS if we own it and it isn't already running
+    // OBS launch: try connecting first (via obs::run's retry loop).
+    // If we manage OBS and it isn't already up after 2 s, launch it.
+    // The WebSocket listener handles reconnection so no blocking wait needed.
     if config.obs_managed && !config.obs_exe_path.is_empty() {
-        if obs_profile::is_running() {
-            info!("OBS already running — skipping launch");
-        } else {
-            let exe = PathBuf::from(&config.obs_exe_path);
-            match obs_profile::launch(&exe) {
-                Ok(()) => info!(path = %exe.display(), "Launched OBS"),
-                Err(e) => warn!(error = %e, "Failed to launch OBS — continuing anyway"),
+        let exe = PathBuf::from(&config.obs_exe_path);
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            if obs_profile::is_running() {
+                info!("OBS already running — skipping managed launch");
+            } else {
+                match obs_profile::launch(&exe) {
+                    Ok(()) => info!(path = %exe.display(), "Launched managed OBS"),
+                    Err(e) => warn!(error = %e, "Failed to launch managed OBS"),
+                }
             }
-            // Brief pause to let OBS initialise its WebSocket server
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        }
+        });
     }
 
     info!(obs = %format!("{}:{}", config.obs_host, config.obs_port), "Starting OBS listener");
@@ -85,6 +107,9 @@ pub async fn run(config: Config) -> Result<()> {
             }
         });
     }
+
+    // Keep update_tx alive so watch receivers stay valid for the daemon lifetime
+    let _update_tx = update_tx;
 
     info!("Daemon ready — waiting for replay buffer saves");
 

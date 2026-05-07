@@ -11,8 +11,8 @@ use std::path::PathBuf;
 pub enum ObsChoice {
     /// Download OBS portable automatically from GitHub releases.
     Download,
-    /// Use an existing OBS installation at a known path.
-    Existing(String),
+    /// User already has OBS — auto-detect its WebSocket config.
+    Existing,
     /// Skip — user will configure obs_exe_path manually later.
     Skip,
 }
@@ -48,9 +48,20 @@ pub fn apply(opts: &SetupOptions) -> Result<()> {
             config.obs_exe_path = exe.to_string_lossy().into_owned();
             config.obs_managed  = true;
         }
-        ObsChoice::Existing(path) => {
-            config.obs_exe_path = path.clone();
-            config.obs_managed  = true;
+        ObsChoice::Existing => {
+            // Auto-detect the exe path for potential managed launch
+            if let Some(exe) = obs_profile::detect_obs() {
+                config.obs_exe_path = exe.to_string_lossy().into_owned();
+            }
+            // Read the user's existing WebSocket config — port and password
+            if let Some(ws) = obs_profile::read_existing_websocket_config() {
+                println!("Detected OBS WebSocket on port {} (auth: {})", ws.port, !ws.password.is_empty());
+                config.obs_port     = ws.port;
+                config.obs_password = ws.password;
+            } else {
+                println!("No existing OBS WebSocket config found — using defaults (port 4455, no auth)");
+            }
+            config.obs_managed = false;
         }
         ObsChoice::Skip => {
             config.obs_managed = false;

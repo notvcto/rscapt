@@ -42,12 +42,18 @@ pub enum ServerMessage {
     Cancelled { id: Uuid, success: bool },
     ClipLibrary { clips: Vec<Clip> },
     ClipUpdated { clips: Vec<Clip> },
+    UpdateAvailable { version: String },
     Error { message: String },
 }
 
 // ── Server (runs inside daemon) ───────────────────────────────────────────────
 
-pub async fn serve(port: u16, queue: Arc<Queue>, clips: Arc<ClipStore>) -> Result<()> {
+pub async fn serve(
+    port: u16,
+    queue: Arc<Queue>,
+    clips: Arc<ClipStore>,
+    update_rx: tokio::sync::watch::Receiver<Option<String>>,
+) -> Result<()> {
     let addr: SocketAddr = format!("127.0.0.1:{port}").parse()?;
     let listener = TcpListener::bind(addr).await?;
     info!("IPC server listening on {addr}");
@@ -57,15 +63,21 @@ pub async fn serve(port: u16, queue: Arc<Queue>, clips: Arc<ClipStore>) -> Resul
         info!("TUI connected from {peer}");
         let queue = queue.clone();
         let clips = clips.clone();
+        let urx = update_rx.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_client(stream, queue, clips).await {
+            if let Err(e) = handle_client(stream, queue, clips, urx).await {
                 warn!("IPC client error: {e}");
             }
         });
     }
 }
 
-async fn handle_client(stream: TcpStream, queue: Arc<Queue>, clips: Arc<ClipStore>) -> Result<()> {
+async fn handle_client(
+    stream: TcpStream,
+    queue: Arc<Queue>,
+    clips: Arc<ClipStore>,
+    mut update_rx: tokio::sync::watch::Receiver<Option<String>>,
+) -> Result<()> {
     let mut job_events = queue.subscribe();
     let mut clip_events = clips.subscribe();
     let (read_half, write_half) = stream.into_split();
@@ -75,6 +87,13 @@ async fn handle_client(stream: TcpStream, queue: Arc<Queue>, clips: Arc<ClipStor
     {
         let jobs = queue.snapshot().await;
         write_msg(&writer, &ServerMessage::Snapshot { jobs }).await?;
+    }
+
+    // If an update is already known, notify immediately.
+    // Extract before .await so the RwLockReadGuard isn't held across the yield point.
+    let current_update = update_rx.borrow().clone();
+    if let Some(version) = current_update {
+        write_msg(&writer, &ServerMessage::UpdateAvailable { version }).await?;
     }
 
     // Task: forward queue events → client
@@ -103,6 +122,24 @@ async fn handle_client(stream: TcpStream, queue: Arc<Queue>, clips: Arc<ClipStor
         }
     });
 
+    // Task: forward update notifications → client
+    let writer_update = writer.clone();
+    let update_task = tokio::spawn(async move {
+        loop {
+            if update_rx.changed().await.is_err() { break; }
+            // Clone before .await so the RwLockReadGuard is dropped first
+            let version = update_rx.borrow().clone();
+            if let Some(version) = version {
+                if write_msg(&writer_update, &ServerMessage::UpdateAvailable { version })
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }
+    });
+
     // Read client commands
     let mut lines = BufReader::new(read_half).lines();
     while let Ok(Some(line)) = lines.next_line().await {
@@ -121,6 +158,7 @@ async fn handle_client(stream: TcpStream, queue: Arc<Queue>, clips: Arc<ClipStor
 
     job_task.abort();
     clip_task.abort();
+    update_task.abort();
     Ok(())
 }
 
