@@ -1,3 +1,5 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod clips;
 mod config;
 mod daemon;
@@ -47,12 +49,27 @@ enum Command {
     Tray,
 }
 
+/// Attach to the parent console (or allocate a new one) for commands that
+/// print plain-text output. No-op on non-Windows.
+#[cfg(windows)]
+fn attach_console() {
+    use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
+    unsafe {
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+            AllocConsole();
+        }
+    }
+}
+#[cfg(not(windows))]
+fn attach_console() {}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // ── First-run: no subcommand + no config → launch setup wizard ────────────
     if cli.command.is_none() && !Config::path().exists() {
+        attach_console();
         return first_run();
     }
 
@@ -77,10 +94,10 @@ async fn main() -> Result<()> {
     match cli.command.unwrap_or(Command::Daemon) {
         Command::Daemon    => daemon::run(config).await,
         Command::Tui       => tui::run(&config).await,
-        Command::Setup     => run_wizard(),
-        Command::Install   => { installer::install()?; Ok(()) }
-        Command::Uninstall => { installer::uninstall()?; Ok(()) }
-        Command::Update    => updater::run_update().await,
+        Command::Setup     => { attach_console(); run_wizard() }
+        Command::Install   => { attach_console(); installer::install()?; Ok(()) }
+        Command::Uninstall => { attach_console(); installer::uninstall()?; Ok(()) }
+        Command::Update    => { attach_console(); updater::run_update().await }
         Command::Tray      => tray::run(config.ipc_port),
     }
 }
