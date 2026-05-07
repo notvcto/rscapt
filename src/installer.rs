@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // ── Public entry points ───────────────────────────────────────────────────────
 
 /// Copy the binary to the install location, create Start Menu shortcut,
-/// register the daemon as a silent autostart, and add to user PATH.
+/// register the daemon as a startup shortcut, and add to user PATH.
 pub fn install() -> Result<()> {
     let install_dir = install_dir();
     let dest_exe = install_dir.join("rscapt.exe");
@@ -28,22 +28,19 @@ pub fn install() -> Result<()> {
         println!("[install] Binary already at install location — skipping copy");
     }
 
-    let vbs_path = write_vbs_launcher(&install_dir)
-        .context("writing VBS launcher")?;
-
-    run_ps(&install_ps_script(&dest_exe, &vbs_path, &install_dir))
+    run_ps(&install_ps_script(&dest_exe, &install_dir))
         .context("running PowerShell install script")?;
 
     println!("[install] Start Menu shortcut created");
-    println!("[install] Autostart registered (rscapt tray will start silently on next login)");
+    println!("[install] Startup shortcut created (rscapt tray will start on next login)");
     println!("[install] {} added to user PATH", install_dir.display());
     println!();
-    println!("Done. Log out and back in, or run `rscapt daemon` now to start immediately.");
+    println!("Done. Log out and back in, or run `rscapt tray` now to start immediately.");
 
     Ok(())
 }
 
-/// Remove the Start Menu shortcut, autostart entry, and PATH entry.
+/// Remove the Start Menu shortcut, startup entry, and PATH entry.
 /// Schedules the install directory for deletion on next reboot since the
 /// running binary is locked by Windows.
 pub fn uninstall() -> Result<()> {
@@ -53,7 +50,7 @@ pub fn uninstall() -> Result<()> {
         .context("running PowerShell uninstall script")?;
 
     println!("[uninstall] Start Menu shortcut removed");
-    println!("[uninstall] Autostart entry removed");
+    println!("[uninstall] Startup shortcut removed");
     println!("[uninstall] Removed from user PATH");
     println!();
     println!(
@@ -76,27 +73,10 @@ fn install_dir() -> PathBuf {
         .join("rscapt")
 }
 
-// ── VBS silent launcher ───────────────────────────────────────────────────────
-
-/// Write a VBS file that launches `rscapt tray` with no visible window.
-/// Returns the path to the written file.
-fn write_vbs_launcher(dir: &Path) -> Result<PathBuf> {
-    let vbs_path = dir.join("rscapt-start.vbs");
-    let exe_path = dir.join("rscapt.exe");
-    // Escape any embedded quotes in the path (extremely rare but correct)
-    let exe_str = exe_path.to_string_lossy().replace('"', "\"\"");
-    let content = format!(
-        "CreateObject(\"WScript.Shell\").Run \"\"\"{exe_str}\"\" tray\", 0, False\n"
-    );
-    std::fs::write(&vbs_path, &content).context("writing VBS launcher")?;
-    Ok(vbs_path)
-}
-
 // ── PowerShell scripts ────────────────────────────────────────────────────────
 
-fn install_ps_script(exe: &Path, vbs: &Path, install_dir: &Path) -> String {
+fn install_ps_script(exe: &std::path::Path, install_dir: &std::path::Path) -> String {
     let exe = ps_str(exe.to_string_lossy().as_ref());
-    let vbs = ps_str(vbs.to_string_lossy().as_ref());
     let dir = ps_str(install_dir.to_string_lossy().as_ref());
 
     format!(
@@ -108,7 +88,12 @@ $lnk.Arguments = 'tui'
 $lnk.Description = 'rscapt - OBS replay clip processor'
 $lnk.IconLocation = '{exe},0'
 $lnk.Save()
-Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'rscapt' -Value ('wscript.exe "' + '{vbs}' + '"') -ErrorAction Stop
+$startup = $shell.CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\rscapt.lnk")
+$startup.TargetPath = '{exe}'
+$startup.Arguments = 'tray'
+$startup.Description = 'rscapt tray'
+$startup.IconLocation = '{exe},0'
+$startup.Save()
 $cur = [Environment]::GetEnvironmentVariable('PATH', 'User')
 if ($null -eq $cur) {{ $cur = '' }}
 if ($cur -notlike '*{dir}*') {{ [Environment]::SetEnvironmentVariable('PATH', ($cur + ';' + '{dir}'), 'User') }}
@@ -116,14 +101,15 @@ if ($cur -notlike '*{dir}*') {{ [Environment]::SetEnvironmentVariable('PATH', ($
     )
 }
 
-fn uninstall_ps_script(install_dir: &Path) -> String {
+fn uninstall_ps_script(install_dir: &std::path::Path) -> String {
     let dir = ps_str(install_dir.to_string_lossy().as_ref());
 
     format!(
         r#"
 $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\rscapt.lnk"
 if (Test-Path $lnk) {{ Remove-Item $lnk -Force -ErrorAction SilentlyContinue }}
-Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'rscapt' -ErrorAction SilentlyContinue
+$startup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\rscapt.lnk"
+if (Test-Path $startup) {{ Remove-Item $startup -Force -ErrorAction SilentlyContinue }}
 $cur = [Environment]::GetEnvironmentVariable('PATH', 'User')
 if ($null -ne $cur) {{ [Environment]::SetEnvironmentVariable('PATH', (($cur -split ';' | Where-Object {{ $_ -ne '{dir}' }}) -join ';'), 'User') }}
 Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'rscapt-cleanup' -Value ('cmd /c rmdir /s /q "' + '{dir}' + '"') -ErrorAction SilentlyContinue

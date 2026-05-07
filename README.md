@@ -11,11 +11,11 @@
 [![Windows](https://img.shields.io/badge/Windows-x64-0078d4?style=flat-square&logo=windows&logoColor=white)](#getting-started)
 [![Rust](https://img.shields.io/badge/Rust-2024_edition-f74c00?style=flat-square&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![OBS](https://img.shields.io/badge/OBS-WebSocket_v5-302e31?style=flat-square&logo=obsstudio&logoColor=white)](https://obsproject.com)
-[![0x0.st](https://img.shields.io/badge/share-0x0.st-4caf50?style=flat-square)](#sharing)
+[![litterbox](https://img.shields.io/badge/share-litterbox-f5a623?style=flat-square)](#sharing)
 
 <br>
 
-*rscapt watches your OBS replay buffer and automatically upscales every saved clip to 1440p with Lanczos. From the built-in TUI you can post-process (motion interpolation, motion blur, colour grading), compress with NVENC / x265 / AV1, and share to [0x0.st](https://0x0.st) — all without touching a timeline editor.*
+*rscapt watches your OBS replay buffer and automatically upscales every saved clip to 1440p with Lanczos. From the built-in TUI you can post-process (motion interpolation, motion blur, colour grading), compress with NVENC / x265 / AV1, and share to [litterbox.catbox.moe](https://litterbox.catbox.moe) — all without touching a timeline editor.*
 
 </div>
 
@@ -28,8 +28,8 @@
 | **Auto-upscale** | Every replay save → Lanczos upscale to 1440p, non-blocking background job |
 | **Post-process** | Per-clip: motion interpolation (up to 120 fps), motion blur (shutter angle), saturation, sharpen |
 | **Compress** | H.264 NVENC · HEVC NVENC · x265 · AV1 × High / Med / Low quality presets; optional trim |
-| **Share** | Upload to [0x0.st](https://0x0.st), auto-copy URL to clipboard, one-key delete |
-| **Clip library** | Browse and manage every clip from the TUI; size, retention days, and share status at a glance |
+| **Share** | Upload to [litterbox.catbox.moe](https://litterbox.catbox.moe), auto-copy URL to clipboard, configurable expiry (1h–1w) |
+| **Clip library** | Browse and manage every clip from the TUI; size and share status at a glance |
 | **OBS management** | Optionally downloads portable OBS, writes a dedicated profile & replay buffer config, launches it silently |
 | **First-run wizard** | Ratatui TUI wizard on first launch — no config file editing required |
 | **Silent autostart** | Daemon starts on login via a VBS launcher (zero console flash) |
@@ -104,8 +104,7 @@ Or launch **rscapt** from the Start Menu.
 |---|---|
 | `p` | Open post-process modal |
 | `x` | Open compress modal |
-| `s` | Share clip (upload to 0x0.st) |
-| `d` | Delete share link for the selected clip |
+| `s` | Share clip (upload to litterbox) |
 
 ### Post-process modal
 
@@ -134,11 +133,9 @@ Mouse clicks and scroll work throughout both TUIs.
 
 ## Sharing
 
-rscapt uploads clips to [0x0.st](https://0x0.st), a no-signup file host. After a Share job completes the URL is automatically copied to your clipboard.
+rscapt uploads clips to [litterbox.catbox.moe](https://litterbox.catbox.moe), a no-signup temporary file host. After a Share job completes the URL is automatically copied to your clipboard.
 
-Retention is calculated by 0x0.st based on file size: smaller clips are kept longer (up to ~365 days; 512 MB files expire after 30 days). The rscapt TUI shows the estimated retention next to each clip.
-
-To remove a shared clip from 0x0.st: select it in the Clips panel and press `d` (or open the Share modal and press `d`).
+Expiry options are **1 hour, 12 hours, 24 hours, 72 hours, and 1 week**. Select the expiry in the Share modal before confirming. The default can be set in config via `share_expiry` (e.g. `"1w"`).
 
 ---
 
@@ -158,6 +155,7 @@ Config is stored at `%APPDATA%\rscapt\config.json`. All fields are set by the wi
 | `obs_managed` | `false` | Whether rscapt launches/manages OBS |
 | `replay_buffer_seconds` | `30` | Replay buffer duration written to the OBS profile |
 | `capture_source` | `"game"` | `"game"` or `"display"` for the OBS scene source type |
+| `share_expiry` | `"1w"` | Default litterbox expiry: `1h` / `12h` / `24h` / `72h` / `1w` |
 
 ---
 

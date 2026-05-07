@@ -14,9 +14,9 @@ pub struct Clip {
     /// Just the filename for display.
     pub filename: String,
     pub size_bytes: u64,
-    /// Share URL from 0x0.st, if uploaded.
+    /// Share URL, if uploaded.
     pub share_url: Option<String>,
-    /// 0x0.st deletion token, if uploaded.
+    /// Deletion token (unused with litterbox, kept for forward compat).
     pub share_delete_token: Option<String>,
 }
 
@@ -47,13 +47,7 @@ impl Clip {
         }
     }
 
-    /// Estimated 0x0.st retention days based on file size.
-    /// Formula: 30 + 335 × (1 − (size / 512 MB)³), capped at 365.
-    pub fn retention_days(&self) -> u32 {
-        let ratio = (self.size_bytes as f64 / (512.0 * 1_048_576.0)).min(1.0);
-        let days = 30.0 + 335.0 * (1.0 - ratio.powi(3));
-        days.round() as u32
-    }
+
 }
 
 // ── ShareStore ─────────────────────────────────────────────────────────────────

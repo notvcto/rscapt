@@ -33,6 +33,10 @@ pub async fn upload(path: &Path, expiry: &str) -> Result<String> {
         .with_context(|| format!("stat {}", path.display()))?
         .len();
 
+    if file_size == 0 {
+        bail!("file is empty (0 bytes) — nothing to upload");
+    }
+
     let file = File::open(path)
         .await
         .with_context(|| format!("opening {}", path.display()))?;

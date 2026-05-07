@@ -494,7 +494,7 @@ impl App {
                     Some(c) => {
                         let share_info = match &c.share_url {
                             Some(url) => format!("  |  Shared: {url}"),
-                            None => format!("  |  ~{} days retention at 0x0.st", c.retention_days()),
+                            None => String::new(),
                         };
                         format!("{}  |  {}{}", c.filename, c.size_label(), share_info)
                     }

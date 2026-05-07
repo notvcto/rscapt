@@ -157,7 +157,7 @@ pub struct Job {
     pub finished_at: Option<DateTime<Utc>>,
     /// Populated after a Share job completes successfully.
     pub share_url: Option<String>,
-    /// 0x0.st deletion token, populated after a Share job completes.
+    /// Deletion token, populated after a Share job completes (if applicable).
     pub share_token: Option<String>,
 }
 
