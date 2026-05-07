@@ -101,29 +101,17 @@ fn install_ps_script(exe: &Path, vbs: &Path, install_dir: &Path) -> String {
 
     format!(
         r#"
-# ── Start Menu shortcut (TUI) ─────────────────────────────────────────────────
 $shell = New-Object -ComObject WScript.Shell
-$lnk   = $shell.CreateShortcut(
-    "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\rscapt.lnk"
-)
-$lnk.TargetPath   = '{exe}'
-$lnk.Arguments    = 'tui'
-$lnk.Description  = 'rscapt — OBS replay clip processor'
+$lnk = $shell.CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\rscapt.lnk")
+$lnk.TargetPath = '{exe}'
+$lnk.Arguments = 'tui'
+$lnk.Description = 'rscapt - OBS replay clip processor'
 $lnk.IconLocation = '{exe},0'
 $lnk.Save()
-
-# ── Autostart: silent tray on login via VBS (no console flash) ────────────────
-Set-ItemProperty `
-    -Path  'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' `
-    -Name  'rscapt' `
-    -Value ('wscript.exe "' + '{vbs}' + '"')
-
-# ── Add install directory to user PATH ────────────────────────────────────────
+Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'rscapt' -Value ('wscript.exe "' + '{vbs}' + '"') -ErrorAction Stop
 $cur = [Environment]::GetEnvironmentVariable('PATH', 'User')
 if ($null -eq $cur) {{ $cur = '' }}
-if ($cur -notlike '*{dir}*') {{
-    [Environment]::SetEnvironmentVariable('PATH', "$cur;{dir}", 'User')
-}}
+if ($cur -notlike '*{dir}*') {{ [Environment]::SetEnvironmentVariable('PATH', ($cur + ';' + '{dir}'), 'User') }}
 "#
     )
 }
@@ -133,29 +121,12 @@ fn uninstall_ps_script(install_dir: &Path) -> String {
 
     format!(
         r#"
-# ── Remove Start Menu shortcut ────────────────────────────────────────────────
 $lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\rscapt.lnk"
-if (Test-Path $lnk) {{ Remove-Item $lnk -Force }}
-
-# ── Remove autostart ──────────────────────────────────────────────────────────
-Remove-ItemProperty `
-    -Path         'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' `
-    -Name         'rscapt' `
-    -ErrorAction  SilentlyContinue
-
-# ── Remove from user PATH ─────────────────────────────────────────────────────
+if (Test-Path $lnk) {{ Remove-Item $lnk -Force -ErrorAction SilentlyContinue }}
+Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'rscapt' -ErrorAction SilentlyContinue
 $cur = [Environment]::GetEnvironmentVariable('PATH', 'User')
-if ($null -ne $cur) {{
-    $new = ($cur -split ';' | Where-Object {{ $_ -ne '{dir}' }}) -join ';'
-    [Environment]::SetEnvironmentVariable('PATH', $new, 'User')
-}}
-
-# ── Schedule install dir deletion on next login (binary is locked now) ────────
-$cleanup = 'cmd /c rmdir /s /q "{dir}"'
-Set-ItemProperty `
-    -Path  'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' `
-    -Name  'rscapt-cleanup' `
-    -Value $cleanup
+if ($null -ne $cur) {{ [Environment]::SetEnvironmentVariable('PATH', (($cur -split ';' | Where-Object {{ $_ -ne '{dir}' }}) -join ';'), 'User') }}
+Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'rscapt-cleanup' -Value ('cmd /c rmdir /s /q "' + '{dir}' + '"') -ErrorAction SilentlyContinue
 "#
     )
 }

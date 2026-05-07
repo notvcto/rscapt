@@ -75,7 +75,7 @@ async fn process_job(
         JobKind::Upscale => upscale(job, config, handle, queue).await,
         JobKind::PostProcess { effects } => post_process(job, effects, handle, queue).await,
         JobKind::Compress(opts) => compress(job, opts, handle, queue).await,
-        JobKind::Share => share(job, config, queue).await,
+        JobKind::Share { expiry } => share(job, config, queue, expiry).await,
     }
 }
 
@@ -275,35 +275,28 @@ async fn compress(
 
 // ── Share ─────────────────────────────────────────────────────────────────────
 
-async fn share(job: &Job, _config: &Config, queue: Arc<Queue>) -> Result<()> {
-    info!(job_id = %job.id, path = %job.source.display(), "Uploading to 0x0.st");
+async fn share(job: &Job, _config: &Config, queue: Arc<Queue>, expiry: &str) -> Result<()> {
+    info!(job_id = %job.id, path = %job.source.display(), expiry, "Uploading to litterbox");
 
     queue.update(job.id, |j| j.progress = 5).await;
 
-    let result = share_mod::upload(&job.source).await?;
+    let url = share_mod::upload(&job.source, expiry).await?;
 
-    info!(
-        job_id = %job.id,
-        url = %result.url,
-        has_token = !result.delete_token.is_empty(),
-        "Upload complete"
-    );
+    info!(job_id = %job.id, url = %url, "Upload complete");
 
-    // Persist token to shares.json
+    // Persist URL to shares.json (no deletion token with litterbox)
     let data_dir = Config::data_dir();
     let mut store = crate::clips::ShareStore::load(&data_dir);
-    store.set(&job.source, result.url.clone(), result.delete_token.clone());
+    store.set(&job.source, url.clone(), String::new());
     if let Err(e) = store.save(&data_dir) {
-        warn!(error = %e, "Failed to persist share token");
+        warn!(error = %e, "Failed to persist share URL");
     }
 
-    // Store result in the job for the daemon/TUI to pick up
-    let url = result.url.clone();
-    let token = result.delete_token.clone();
+    let url_clone = url.clone();
     queue
         .update(job.id, |j| {
-            j.share_url = Some(url);
-            j.share_token = Some(token);
+            j.share_url = Some(url_clone);
+            j.share_token = None;
         })
         .await;
 
@@ -346,7 +339,7 @@ async fn run_ffmpeg_job(
     let mut last_logged_pct: u8 = 0;
 
     while let Ok(Some(line)) = reader.next_line().await {
-        // Check cancellation
+        // Check cancellation once per line
         let snapshot = queue.snapshot().await;
         if let Some(j) = snapshot.iter().find(|j| j.id == job_id) {
             if j.status == JobStatus::Cancelled {
@@ -359,27 +352,31 @@ async fn run_ffmpeg_job(
             }
         }
 
-        debug!(job_id = %job_id, line = %line, "ffmpeg");
+        // Windows ffmpeg uses \r (not \n) for progress updates, so a single
+        // \n-terminated "line" may contain many \r-separated progress segments.
+        for segment in line.split('\r') {
+            debug!(job_id = %job_id, segment = %segment, "ffmpeg");
 
-        if duration_secs.is_none() {
-            if let Some(d) = parse_ffmpeg_duration(&line) {
-                duration_secs = Some(d);
-                info!(job_id = %job_id, duration_secs = d, "ffmpeg: clip duration parsed");
+            if duration_secs.is_none() {
+                if let Some(d) = parse_ffmpeg_duration(segment) {
+                    duration_secs = Some(d);
+                    info!(job_id = %job_id, duration_secs = d, "ffmpeg: clip duration parsed");
+                }
             }
-        }
 
-        if let (Some(total), Some(current)) = (duration_secs, parse_ffmpeg_time(&line)) {
-            let pct = ((current / total) * 100.0).min(99.0) as u8;
-            queue.update(job_id, |j| j.progress = pct).await;
+            if let (Some(total), Some(current)) = (duration_secs, parse_ffmpeg_time(segment)) {
+                let pct = ((current / total) * 100.0).min(99.0) as u8;
+                queue.update(job_id, |j| j.progress = pct).await;
 
-            if pct >= last_logged_pct + 25 {
-                info!(job_id = %job_id, progress = pct, "ffmpeg progress");
-                last_logged_pct = pct;
+                if pct >= last_logged_pct + 25 {
+                    info!(job_id = %job_id, progress = pct, "ffmpeg progress");
+                    last_logged_pct = pct;
+                }
             }
-        }
 
-        if line.contains("Error") || line.contains("Invalid") || line.contains("No such file") {
-            warn!(job_id = %job_id, line = %line, "ffmpeg warning/error line");
+            if segment.contains("Error") || segment.contains("Invalid") || segment.contains("No such file") {
+                warn!(job_id = %job_id, segment = %segment, "ffmpeg warning/error line");
+            }
         }
     }
 

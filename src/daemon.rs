@@ -133,29 +133,20 @@ async fn on_job_event(job: &Job, clips: &Arc<ClipStore>) {
         JobStatus::Done => {
             match &job.kind {
                 JobKind::Upscale | JobKind::PostProcess { .. } | JobKind::Compress(_) => {
-                    // Register the output file in the clip library
                     clips.add_if_new(&job.output).await;
-
                     notify::toast(
                         &format!("{} done", job.kind_label()),
                         &format!(
                             "{} → {}",
                             job.display_name(),
-                            job.output
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy()
+                            job.output.file_name().unwrap_or_default().to_string_lossy()
                         ),
                     );
                 }
-                JobKind::Share => {
-                    // Share job stores url/token on the job; propagate to clip library
-                    if let (Some(url), Some(token)) = (&job.share_url, &job.share_token) {
-                        clips.set_share(&job.source, url.clone(), token.clone()).await;
-                        notify::toast(
-                            "Clip shared",
-                            url,
-                        );
+                JobKind::Share { .. } => {
+                    if let Some(url) = &job.share_url {
+                        clips.set_share(&job.source, url.clone(), String::new()).await;
+                        notify::toast("Clip shared", url);
                     }
                 }
             }

@@ -60,6 +60,10 @@ pub struct Config {
     /// Capture source type written to the rscapt OBS profile: "game" or "display".
     #[serde(default = "default_capture_source")]
     pub capture_source: String,
+
+    /// Litterbox expiry for shared clips: "1h", "12h", "24h", "72h", "1w".
+    #[serde(default = "default_share_expiry")]
+    pub share_expiry: String,
 }
 
 fn default_obs_host() -> String { "127.0.0.1".into() }
@@ -71,6 +75,7 @@ fn default_nvenc_quality() -> u8 { 18 }
 fn default_ipc_port() -> u16 { 7373 }
 fn default_replay_buffer_seconds() -> u32 { 30 }
 fn default_capture_source() -> String { "game".into() }
+fn default_share_expiry() -> String { "1w".into() }
 
 impl Default for Config {
     fn default() -> Self {
@@ -89,6 +94,7 @@ impl Default for Config {
             obs_managed: false,
             replay_buffer_seconds: default_replay_buffer_seconds(),
             capture_source: default_capture_source(),
+            share_expiry: default_share_expiry(),
         }
     }
 }

@@ -125,8 +125,8 @@ pub enum JobKind {
     PostProcess { effects: Vec<Effect> },
     /// User-triggered compression with codec/quality presets + optional trim
     Compress(CompressOptions),
-    /// Upload output file to 0x0.st and store the share URL + deletion token
-    Share,
+    /// Upload to litterbox.catbox.moe with the given expiry ("1h","12h","24h","72h","1w")
+    Share { expiry: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -190,7 +190,7 @@ impl Job {
             JobKind::Upscale => "Upscale",
             JobKind::PostProcess { .. } => "Post-Process",
             JobKind::Compress(_) => "Compress",
-            JobKind::Share => "Share",
+            JobKind::Share { .. } => "Share",
         }
     }
 }

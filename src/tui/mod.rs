@@ -42,11 +42,11 @@ pub async fn run(config: &Config) -> Result<()> {
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, crossterm::terminal::SetTitle("rscapt"), EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new();
+    let mut app = App::new(crate::share::expiry_idx(&config.share_expiry));
 
     let result = run_loop(&mut terminal, &mut app, &mut msg_rx, &mut cmd_client).await;
 
@@ -153,7 +153,7 @@ async fn handle_server_message(app: &mut App, msg: ServerMessage, _cmd_client: &
         }
         ServerMessage::JobUpdate { job } => {
             // If a Share job completed, auto-copy URL to clipboard
-            if let crate::job::JobKind::Share = &job.kind {
+            if let crate::job::JobKind::Share { .. } = &job.kind {
                 if job.status == crate::job::JobStatus::Done {
                     if let Some(url) = &job.share_url {
                         copy_to_clipboard(url);
@@ -231,14 +231,6 @@ async fn handle_normal_key(
         KeyCode::Char('p') if app.focus == Focus::Clips => app.open_post_process(),
         KeyCode::Char('x') if app.focus == Focus::Clips => app.open_compress(),
         KeyCode::Char('s') if app.focus == Focus::Clips => app.open_share(),
-        KeyCode::Char('d') if app.focus == Focus::Clips => {
-            if let Some(clip) = app.selected_clip() {
-                if clip.share_url.is_some() {
-                    let path = clip.path.clone();
-                    cmd_client.send(&ClientMessage::DeleteShare { clip_path: path }).await?;
-                }
-            }
-        }
 
         _ => {}
     }
@@ -309,21 +301,15 @@ async fn handle_share_key(
 ) -> Result<bool> {
     match code {
         KeyCode::Esc => { app.modal = Modal::None; }
+        KeyCode::Left  | KeyCode::Char('h') => app.share_expiry_prev(),
+        KeyCode::Right | KeyCode::Char('l') => app.share_expiry_next(),
         KeyCode::Enter => {
-            if let Some(clip_path) = app.share_clip_path() {
+            if let Some((clip_path, expiry)) = app.share_confirm() {
                 cmd_client
-                    .send(&ClientMessage::Share { clip_path })
+                    .send(&ClientMessage::Share { clip_path, expiry })
                     .await?;
             }
             app.modal = Modal::None;
-        }
-        KeyCode::Char('d') => {
-            if let Some(clip_path) = app.share_delete_path() {
-                cmd_client
-                    .send(&ClientMessage::DeleteShare { clip_path })
-                    .await?;
-                app.modal = Modal::None;
-            }
         }
         _ => {}
     }

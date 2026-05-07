@@ -5,7 +5,6 @@ use crate::{
     clips::{Clip, ClipStore},
     job::{CompressOptions, Effect, Job, JobKind},
     queue::{Queue, QueueEvent},
-    share as share_mod,
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -29,8 +28,7 @@ pub enum ClientMessage {
     Cancel { id: Uuid },
     PostProcess { clip_path: PathBuf, effects: Vec<Effect> },
     Compress { clip_path: PathBuf, options: CompressOptions },
-    Share { clip_path: PathBuf },
-    DeleteShare { clip_path: PathBuf },
+    Share { clip_path: PathBuf, expiry: String },
 }
 
 /// Messages the daemon sends to the TUI.
@@ -192,28 +190,10 @@ async fn dispatch(
             let job = Job::new(JobKind::Compress(options), clip_path, output);
             queue.push(job).await;
         }
-        ClientMessage::Share { clip_path } => {
-            // output == source for share (no file transformation)
+        ClientMessage::Share { clip_path, expiry } => {
             let output = clip_path.clone();
-            let job = Job::new(JobKind::Share, clip_path, output);
+            let job = Job::new(JobKind::Share { expiry }, clip_path, output);
             queue.push(job).await;
-        }
-        ClientMessage::DeleteShare { clip_path } => {
-            if let Some(token) = clips.get_share_token(&clip_path).await {
-                // Get the URL too
-                let clip_list = clips.snapshot().await;
-                let url = clip_list
-                    .iter()
-                    .find(|c| c.path == clip_path)
-                    .and_then(|c| c.share_url.clone());
-
-                if let Some(url) = url {
-                    share_mod::delete(&url, &token).await?;
-                    clips.clear_share(&clip_path).await;
-                }
-            } else {
-                warn!(path = %clip_path.display(), "DeleteShare: no token found");
-            }
         }
     }
     Ok(())

@@ -143,6 +143,8 @@ impl CompressState {
 
 pub struct ShareState {
     pub clip: Clip,
+    /// Index into `crate::share::EXPIRY_OPTIONS`
+    pub expiry_idx: usize,
 }
 
 pub enum Modal {
@@ -172,10 +174,12 @@ pub struct App {
     pub hit: HitRects,
     /// Set when the daemon reports a newer version is available.
     pub update_available: Option<String>,
+    /// Default expiry index for the share modal (from config).
+    pub default_expiry_idx: usize,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(default_expiry_idx: usize) -> Self {
         Self {
             jobs: Vec::new(),
             clips: Vec::new(),
@@ -185,6 +189,7 @@ impl App {
             modal: Modal::None,
             hit: HitRects::default(),
             update_available: None,
+            default_expiry_idx,
         }
     }
 
@@ -332,7 +337,10 @@ impl App {
 
     pub fn open_share(&mut self) {
         if let Some(clip) = self.selected_clip() {
-            self.modal = Modal::Share(ShareState { clip: clip.clone() });
+            self.modal = Modal::Share(ShareState {
+                clip: clip.clone(),
+                expiry_idx: self.default_expiry_idx,
+            });
         }
     }
 
@@ -376,7 +384,7 @@ impl App {
     fn draw_jobs(&mut self, frame: &mut Frame, area: Rect) {
         let focused = self.focus == Focus::Jobs;
         let border_style = if focused {
-            Style::default().fg(Color::White)
+            Style::default().fg(Color::Rgb(232, 80, 26))
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -408,7 +416,7 @@ impl App {
                     .border_style(border_style)
                     .title(" Jobs "),
             )
-            .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+            .highlight_style(Style::default().bg(Color::Rgb(60, 20, 5)).add_modifier(Modifier::BOLD))
             .highlight_symbol("▶ ");
 
         frame.render_stateful_widget(list, area, &mut self.job_list);
@@ -417,7 +425,7 @@ impl App {
     fn draw_clips(&mut self, frame: &mut Frame, area: Rect) {
         let focused = self.focus == Focus::Clips;
         let border_style = if focused {
-            Style::default().fg(Color::White)
+            Style::default().fg(Color::Rgb(232, 80, 26))
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -440,7 +448,7 @@ impl App {
                     .border_style(border_style)
                     .title(" Clips "),
             )
-            .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+            .highlight_style(Style::default().bg(Color::Rgb(60, 20, 5)).add_modifier(Modifier::BOLD))
             .highlight_symbol("▶ ");
 
         frame.render_stateful_widget(list, area, &mut self.clip_list);
@@ -468,7 +476,7 @@ impl App {
                             JobStatus::Done => Color::Green,
                             JobStatus::Failed(_) => Color::Red,
                             JobStatus::Cancelled => Color::Magenta,
-                            _ => Color::Yellow,
+                            _ => Color::Rgb(232, 80, 26),
                         };
                         let gauge = Gauge::default()
                             .block(Block::default().borders(Borders::ALL).title(" Progress "))
@@ -522,12 +530,12 @@ impl App {
                 if self.focus == Focus::Jobs {
                     "  Tab: clips panel   ↑/↓: navigate   c: cancel job   q: quit"
                 } else {
-                    "  Tab: jobs panel   ↑/↓: navigate   p: post-process   x: compress   s: share   d: delete share   q: quit"
+                    "  Tab: jobs panel   ↑/↓: navigate   p: post-process   x: compress   s: share   q: quit"
                 }
             }
             Modal::PostProcess(_) => "  ↑/↓: navigate   Space: toggle   ←/→: adjust value   Enter: apply   Esc: cancel",
             Modal::Compress(_)    => "  ↑/↓: fields   ←/→: change codec/quality   type: trim time   Enter: queue   Esc: cancel",
-            Modal::Share(_)       => "  Enter: upload   Esc: cancel",
+            Modal::Share(_)       => "  ←/→: expiry   Enter: upload   Esc: cancel",
         };
         frame.render_widget(
             Paragraph::new(help).style(Style::default().fg(Color::DarkGray)),
@@ -647,46 +655,53 @@ impl App {
     fn draw_modal_share(&self, frame: &mut Frame, area: Rect) {
         let Modal::Share(state) = &self.modal else { return };
 
-        let popup = centered_rect(56, 50, area);
+        let popup = centered_rect(56, 55, area);
         frame.render_widget(Clear, popup);
 
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(" Share ")
+            .title(" Share to litterbox.catbox.moe ")
             .style(Style::default().fg(Color::White));
         let inner = block.inner(popup);
         frame.render_widget(block, popup);
 
         let clip = &state.clip;
+        let (expiry_key, expiry_label) = crate::share::EXPIRY_OPTIONS[state.expiry_idx];
+
         let mut lines: Vec<Line> = vec![
             Line::from(vec![
-                Span::styled("  File:      ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  File:    ", Style::default().fg(Color::DarkGray)),
                 Span::raw(&clip.filename),
             ]),
             Line::from(vec![
-                Span::styled("  Size:      ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  Size:    ", Style::default().fg(Color::DarkGray)),
                 Span::raw(clip.size_label()),
             ]),
             Line::from(vec![
-                Span::styled("  Retention: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(format!("~{} days at 0x0.st", clip.retention_days())),
+                Span::styled("  Expires: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("◄ ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{expiry_label} ({expiry_key})"),
+                    Style::default().fg(Color::Rgb(232, 80, 26)).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" ►  ←/→ to change", Style::default().fg(Color::DarkGray)),
             ]),
         ];
 
         if let Some(url) = &clip.share_url {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
-                Span::styled("  URL:       ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  URL:     ", Style::default().fg(Color::DarkGray)),
                 Span::styled(url.as_str(), Style::default().fg(Color::Cyan)),
             ]));
+            lines.push(Line::from(""));
             lines.push(Line::from(vec![
-                Span::styled("             ", Style::default()),
-                Span::styled("[Enter: re-upload]  [d: delete]", Style::default().fg(Color::DarkGray)),
+                Span::styled("  Enter: re-upload   Esc: cancel", Style::default().fg(Color::DarkGray)),
             ]));
         } else {
             lines.push(Line::from(""));
             lines.push(Line::from(
-                Span::styled("  Press Enter to upload.", Style::default().fg(Color::Yellow)),
+                Span::styled("  Enter: upload   Esc: cancel", Style::default().fg(Color::DarkGray)),
             ));
         }
 
@@ -817,20 +832,26 @@ impl App {
 
     // ── Share key handlers ────────────────────────────────────────────────────
 
-    pub fn share_clip_path(&self) -> Option<std::path::PathBuf> {
+    /// Returns (clip_path, expiry_str) for the share modal.
+    pub fn share_confirm(&self) -> Option<(std::path::PathBuf, String)> {
         if let Modal::Share(s) = &self.modal {
-            return Some(s.clip.path.clone());
+            let expiry = crate::share::EXPIRY_OPTIONS[s.expiry_idx].0.to_owned();
+            return Some((s.clip.path.clone(), expiry));
         }
         None
     }
 
-    pub fn share_delete_path(&self) -> Option<std::path::PathBuf> {
-        if let Modal::Share(s) = &self.modal {
-            if s.clip.share_url.is_some() {
-                return Some(s.clip.path.clone());
-            }
+    pub fn share_expiry_next(&mut self) {
+        if let Modal::Share(s) = &mut self.modal {
+            s.expiry_idx = (s.expiry_idx + 1) % crate::share::EXPIRY_OPTIONS.len();
         }
-        None
+    }
+
+    pub fn share_expiry_prev(&mut self) {
+        if let Modal::Share(s) = &mut self.modal {
+            let n = crate::share::EXPIRY_OPTIONS.len();
+            s.expiry_idx = if s.expiry_idx == 0 { n - 1 } else { s.expiry_idx - 1 };
+        }
     }
 }
 
