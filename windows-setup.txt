@@ -1,0 +1,116 @@
+capture — Windows Setup Checklist
+===================================
+
+1. FFMPEG
+---------
+- Download a static build from https://ffmpeg.org/download.html
+  → Windows → gyan.dev → ffmpeg-release-full.7z (or the -essentials build is fine)
+- Extract so you have a folder structure like:
+    ffmpeg\
+      bin\
+        ffmpeg.exe
+        ffplay.exe
+        ffprobe.exe
+- Place add-ffmpeg-to-path.ps1 next to the ffmpeg\ folder
+- Right-click add-ffmpeg-to-path.ps1 → Run with PowerShell
+  (if blocked: powershell -ExecutionPolicy Bypass -File add-ffmpeg-to-path.ps1)
+- Open a new terminal and verify: ffmpeg -version
+
+
+2. OBS STUDIO
+-------------
+- Download and install from https://obsproject.com
+- OBS 28+ has obs-websocket built in — no separate plugin needed
+
+Replay Buffer settings (Tools → Settings → Output → Replay Buffer):
+  - Enable Replay Buffer: ON
+  - Maximum Replay Time: your preference (60–120s is typical)
+  - Maximum Memory: 2048 MB or higher (you have 32GB RAM, be generous)
+
+Output settings (Settings → Output, switch to Advanced mode):
+  Recording / Replay Buffer encoder:
+  - Encoder: NVIDIA NVENC H.264 (or HEVC if you prefer)
+  - Rate Control: CQP
+  - CQ Level: 16–18 (lower = better quality, larger file)
+  - Preset: P4 (Quality) or P5 (Slow) — P4 is fine
+  - Keyframe Interval: 2
+  - Profile: High
+  - Multipass Mode: Two Pass (Quarter Resolution) or Single Pass
+
+Recording path (Settings → Output → Recording):
+  - Set a folder for OBS to dump raw replay files
+  - Recommended: C:\Users\vcto\Videos\ReplayRaw
+  - capture will read from here and write processed clips to:
+    C:\Users\vcto\Videos\Captures
+
+Video settings (Settings → Video):
+  - Base Resolution: your desktop resolution
+  - Output Resolution: 1920x1080 (capture upscales to 1440p, no need to record higher)
+  - FPS: 60
+
+
+3. OBS WEBSOCKET
+----------------
+Tools → obs-websocket Settings:
+  - Enable WebSocket server: ON
+  - Server Port: 4455  (must match config, 4455 is the default)
+  - Enable Authentication: ON (recommended)
+  - Set a password — you'll need this for the config file
+
+
+4. CAPTURE CONFIG
+-----------------
+Create the file: C:\Users\vcto\AppData\Roaming\capture\config.json
+
+Minimum config:
+{
+  "obs_password": "your_obs_websocket_password",
+  "saturation": 1.2
+}
+
+Full config with all options (edit as needed):
+{
+  "obs_host": "127.0.0.1",
+  "obs_port": 4455,
+  "obs_password": "your_obs_websocket_password",
+  "output_dir": "C:\\Users\\vcto\\Videos\\Captures",
+  "upscale_resolution": "2560x1440",
+  "upscale_filter": "lanczos",
+  "encoder": "h264_nvenc",
+  "nvenc_quality": 18,
+  "sharpen_strength": 1.0,
+  "saturation": 1.2,
+  "ipc_port": 7373
+}
+
+Note: backslashes in JSON must be doubled (\\)
+
+
+5. RUNNING CAPTURE
+------------------
+- Open a terminal (Win+R → cmd or PowerShell)
+- Run: capture.exe daemon
+- You should see: "OBS WebSocket handshake complete — listening for ReplayBufferSaved"
+- If anything looks wrong, check the log file at:
+    C:\Users\vcto\Videos\capture-logs\capture.YYYY-MM-DD.log
+
+To open the job monitor TUI (separate terminal):
+  capture.exe tui
+
+
+6. TEST IT
+----------
+- Start OBS, start the Replay Buffer (Start Replay Buffer button or a hotkey)
+- Play something, make a play, hit your replay buffer save hotkey
+- capture should pick it up instantly and start processing
+- You'll get a Windows toast notification when the clip is ready
+- Check C:\Users\vcto\Videos\Captures for the output file
+
+
+7. OPTIONAL — RUN ON LOGIN
+---------------------------
+To have the daemon start automatically with Windows:
+- Win+R → shell:startup
+- Create a shortcut to capture.exe there
+- Right-click shortcut → Properties → Target: "C:\path\to\capture.exe daemon"
+- Change "Run" dropdown to "Minimized"

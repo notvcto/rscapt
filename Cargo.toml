@@ -1,0 +1,68 @@
+[package]
+name = "rscapt"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "rscapt"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# OBS WebSocket
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+tungstenite = "0.24"
+futures-util = "0.3"
+
+# OBS auth
+sha2 = "0.10"
+base64 = "0.22"
+
+# Async streams
+tokio-stream = { version = "0.1", features = ["net", "io-util"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# TUI
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+# IPC (daemon <-> TUI over local TCP)
+tokio-util = { version = "0.7", features = ["codec", "io"] }
+bytes = "1"
+
+# HTTP (file sharing via 0x0.st)
+reqwest = { version = "0.12", features = ["multipart", "native-tls", "stream", "json"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+# Config / paths
+dirs = "5"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+# No Windows-specific crate deps — toasts go via PowerShell, clipboard via Set-Clipboard
+
+[build-dependencies]
+embed-resource = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
