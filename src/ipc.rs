@@ -97,14 +97,22 @@ async fn handle_client(
     // Task: forward queue events → client
     let writer_jobs = writer.clone();
     let job_task = tokio::spawn(async move {
-        while let Ok(event) = job_events.recv().await {
-            let msg = match event {
-                QueueEvent::JobAdded(job) | QueueEvent::JobUpdated(job) => {
-                    ServerMessage::JobUpdate { job }
+        loop {
+            match job_events.recv().await {
+                Ok(event) => {
+                    let msg = match event {
+                        QueueEvent::JobAdded(job) | QueueEvent::JobUpdated(job) => {
+                            ServerMessage::JobUpdate { job }
+                        }
+                    };
+                    if write_msg(&writer_jobs, &msg).await.is_err() {
+                        break;
+                    }
                 }
-            };
-            if write_msg(&writer_jobs, &msg).await.is_err() {
-                break;
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                    // Skipped some progress updates — not fatal, continue
+                }
+                Err(_) => break,
             }
         }
     });

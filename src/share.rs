@@ -20,14 +20,8 @@ pub fn expiry_idx(s: &str) -> usize {
 }
 
 /// Upload a file to litterbox.catbox.moe.
-/// Returns the public URL.
+/// Returns the public URL. Retries up to 3 times on transient server errors.
 pub async fn upload(path: &Path, expiry: &str) -> Result<String> {
-    let filename = path
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned();
-
     let file_size = tokio::fs::metadata(path)
         .await
         .with_context(|| format!("stat {}", path.display()))?
@@ -37,31 +31,37 @@ pub async fn upload(path: &Path, expiry: &str) -> Result<String> {
         bail!("file is empty (0 bytes) — nothing to upload");
     }
 
-    let file = File::open(path)
-        .await
-        .with_context(|| format!("opening {}", path.display()))?;
-
-    let stream = ReaderStream::new(file);
-    let body = reqwest::Body::wrap_stream(stream);
-
-    let file_part = reqwest::multipart::Part::stream_with_length(body, file_size)
-        .file_name(filename);
-
-    let form = reqwest::multipart::Form::new()
-        .text("reqtype", "fileupload")
-        .text("time", expiry.to_owned())
-        .part("fileToUpload", file_part);
-
     let client = reqwest::Client::builder()
         .user_agent(format!("rscapt/{}", env!("CARGO_PKG_VERSION")))
         .build()?;
 
-    let response = client
-        .post("https://litterbox.catbox.moe/resources/internals/api.php")
-        .multipart(form)
-        .send()
-        .await
-        .context("sending upload request")?;
+    let mut attempts = 0u32;
+    let response = loop {
+        attempts += 1;
+        let form = reqwest::multipart::Form::new()
+            .text("reqtype", "fileupload")
+            .text("time", expiry.to_owned())
+            .part("fileToUpload", build_file_part(path, file_size).await?);
+
+        match client
+            .post("https://litterbox.catbox.moe/resources/internals/api.php")
+            .multipart(form)
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_server_error() && attempts < 3 => {
+                let status = r.status();
+                tracing::warn!(attempt = attempts, %status, "litterbox transient error, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
+            Ok(r) => break r,
+            Err(e) if attempts < 3 => {
+                tracing::warn!(attempt = attempts, error = %e, "litterbox request failed, retrying");
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
+            Err(e) => bail!("upload failed after {attempts} attempts: {e}"),
+        }
+    };
 
     if !response.status().is_success() {
         bail!("litterbox returned HTTP {}", response.status());
@@ -79,4 +79,19 @@ pub async fn upload(path: &Path, expiry: &str) -> Result<String> {
     }
 
     Ok(url)
+}
+
+async fn build_file_part(path: &Path, file_size: u64) -> Result<reqwest::multipart::Part> {
+    let filename = path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let file = File::open(path)
+        .await
+        .with_context(|| format!("opening {}", path.display()))?;
+    let stream = ReaderStream::new(file);
+    let body = reqwest::Body::wrap_stream(stream);
+    Ok(reqwest::multipart::Part::stream_with_length(body, file_size)
+        .file_name(filename))
 }

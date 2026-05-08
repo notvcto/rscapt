@@ -19,7 +19,7 @@ pub struct Queue {
 
 impl Queue {
     pub fn new() -> Arc<Self> {
-        let (tx, _) = broadcast::channel(64);
+        let (tx, _) = broadcast::channel(256);
         Arc::new(Self {
             jobs: Mutex::new(VecDeque::new()),
             tx,

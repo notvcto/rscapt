@@ -71,9 +71,14 @@ pub async fn run(config: Config) -> Result<()> {
         let mut events = queue.subscribe();
         let clips_watch = clips.clone();
         tokio::spawn(async move {
-            while let Ok(event) = events.recv().await {
-                if let QueueEvent::JobUpdated(job) = event {
-                    on_job_event(&job, &clips_watch).await;
+            loop {
+                match events.recv().await {
+                    Ok(QueueEvent::JobUpdated(job)) => on_job_event(&job, &clips_watch).await,
+                    Ok(_) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        warn!(n, "daemon event loop lagged — some progress updates skipped");
+                    }
+                    Err(_) => break,
                 }
             }
         });

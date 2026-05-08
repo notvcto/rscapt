@@ -342,6 +342,7 @@ async fn run_ffmpeg_job(
 
     let mut reader = BufReader::new(stderr).lines();
     let mut duration_secs: Option<f64> = None;
+    let mut last_pct: Option<u8> = None;
     let mut last_logged_pct: u8 = 0;
 
     while let Ok(Some(line)) = reader.next_line().await {
@@ -372,11 +373,16 @@ async fn run_ffmpeg_job(
 
             if let (Some(total), Some(current)) = (duration_secs, parse_ffmpeg_time(segment)) {
                 let pct = ((current / total) * 100.0).min(99.0) as u8;
-                queue.update(job_id, |j| j.progress = pct).await;
+                // Only broadcast when the integer percentage actually changes —
+                // prevents flooding the broadcast channel with identical updates.
+                if last_pct != Some(pct) {
+                    last_pct = Some(pct);
+                    queue.update(job_id, |j| j.progress = pct).await;
 
-                if pct >= last_logged_pct + 25 {
-                    info!(job_id = %job_id, progress = pct, "ffmpeg progress");
-                    last_logged_pct = pct;
+                    if pct >= last_logged_pct + 25 {
+                        info!(job_id = %job_id, progress = pct, "ffmpeg progress");
+                        last_logged_pct = pct;
+                    }
                 }
             }
 

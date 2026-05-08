@@ -63,24 +63,49 @@ fn attach_console() {
 #[cfg(not(windows))]
 fn attach_console() {}
 
-/// Ensure the TUI has a console with UTF-8 output encoding.
-/// Attaches to the parent console if one exists, otherwise allocates a new one.
-/// Sets codepage 65001 (UTF-8) so box-drawing characters render correctly.
+/// Ensure the TUI runs in a Unicode-capable console.
+///
+/// Detection order:
+/// 1. `WT_SESSION` env var is set → already inside Windows Terminal, nothing to do.
+/// 2. `AttachConsole` succeeds → running from a real terminal (cmd/PS), nothing to do.
+/// 3. Otherwise → re-launch via `wt.exe` for proper Unicode rendering.
+///    Falls back to `AllocConsole` + UTF-8 codepage if wt.exe isn't available.
+///
+/// Returns `true` if the process was re-launched and the caller should exit.
 #[cfg(windows)]
-fn setup_tui_console() {
+fn setup_tui_console() -> bool {
+    // Already inside Windows Terminal — WT sets this automatically.
+    if std::env::var("WT_SESSION").is_ok() {
+        return false;
+    }
     use windows_sys::Win32::System::Console::{
         AllocConsole, AttachConsole, SetConsoleCP, SetConsoleOutputCP, ATTACH_PARENT_PROCESS,
     };
     unsafe {
-        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
-            AllocConsole();
+        if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
+            return false; // running from an existing terminal
         }
+    }
+    // No console — try Windows Terminal first.
+    let args: Vec<String> = std::env::args().collect();
+    if std::process::Command::new("wt.exe")
+        .arg("--window").arg("new")
+        .args(&args)
+        .spawn()
+        .is_ok()
+    {
+        return true; // re-launched; caller should exit
+    }
+    // wt.exe not available — fall back to conhost with UTF-8 codepage.
+    unsafe {
+        AllocConsole();
         SetConsoleCP(65001);
         SetConsoleOutputCP(65001);
     }
+    false
 }
 #[cfg(not(windows))]
-fn setup_tui_console() {}
+fn setup_tui_console() -> bool { false }
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -112,7 +137,10 @@ async fn main() -> Result<()> {
 
     match cli.command.unwrap_or(Command::Daemon) {
         Command::Daemon    => daemon::run(config).await,
-        Command::Tui       => { setup_tui_console(); tui::run(&config).await }
+        Command::Tui       => {
+            if setup_tui_console() { return Ok(()); }
+            tui::run(&config).await
+        }
         Command::Setup     => { attach_console(); run_wizard() }
         Command::Install   => { attach_console(); installer::install()?; Ok(()) }
         Command::Uninstall => { attach_console(); installer::uninstall()?; Ok(()) }
