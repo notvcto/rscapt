@@ -63,39 +63,24 @@ fn attach_console() {
 #[cfg(not(windows))]
 fn attach_console() {}
 
-/// If there is no parent console (launched from Start Menu / shortcut),
-/// re-launch this process inside Windows Terminal for proper Unicode rendering.
-/// Returns true if re-launch succeeded — caller should exit immediately.
-/// Falls back to a plain AllocConsole if wt.exe is not available.
+/// Ensure the TUI has a console with UTF-8 output encoding.
+/// Attaches to the parent console if one exists, otherwise allocates a new one.
+/// Sets codepage 65001 (UTF-8) so box-drawing characters render correctly.
 #[cfg(windows)]
-fn relaunch_in_wt_if_needed() -> bool {
-    // Guard: already inside WT (or spawned by tray into WT) — don't loop.
-    if std::env::var("RSCAPT_IN_WT").is_ok() {
-        return false;
-    }
-    use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
+fn setup_tui_console() {
+    use windows_sys::Win32::System::Console::{
+        AllocConsole, AttachConsole, SetConsoleCP, SetConsoleOutputCP, ATTACH_PARENT_PROCESS,
+    };
     unsafe {
-        if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
-            return false; // already running inside a real terminal
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+            AllocConsole();
         }
+        SetConsoleCP(65001);
+        SetConsoleOutputCP(65001);
     }
-    // No parent console — try Windows Terminal (--window new forces a separate window)
-    let args: Vec<String> = std::env::args().collect();
-    let ok = std::process::Command::new("wt.exe")
-        .arg("--window").arg("new")
-        .args(&args)
-        .env("RSCAPT_IN_WT", "1")
-        .spawn()
-        .is_ok();
-    if ok {
-        return true;
-    }
-    // wt.exe not available — fall back to legacy console
-    unsafe { AllocConsole(); }
-    false
 }
 #[cfg(not(windows))]
-fn relaunch_in_wt_if_needed() -> bool { false }
+fn setup_tui_console() {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -127,10 +112,7 @@ async fn main() -> Result<()> {
 
     match cli.command.unwrap_or(Command::Daemon) {
         Command::Daemon    => daemon::run(config).await,
-        Command::Tui       => {
-            if relaunch_in_wt_if_needed() { return Ok(()); }
-            tui::run(&config).await
-        }
+        Command::Tui       => { setup_tui_console(); tui::run(&config).await }
         Command::Setup     => { attach_console(); run_wizard() }
         Command::Install   => { attach_console(); installer::install()?; Ok(()) }
         Command::Uninstall => { attach_console(); installer::uninstall()?; Ok(()) }
