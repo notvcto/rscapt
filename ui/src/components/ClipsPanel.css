@@ -1,0 +1,77 @@
+.clips-panel { flex: 1; }
+
+.clip-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.1s, background 0.1s;
+}
+
+.clip-row:hover { border-color: var(--text-muted); }
+.clip-row.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+
+.clip-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.clip-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-size {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.clip-share-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 20px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  max-width: 100%;
+}
+.clip-share-pill:hover { color: var(--accent-hover); }
+
+.clip-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.clip-btn {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.1s, background 0.1s;
+}
+.clip-btn:hover { border-color: var(--text-muted); background: var(--border); }
+.clip-btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.clip-btn.accent:hover { background: var(--accent-hover); border-color: var(--accent-hover); }

@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "app"]
+resolver = "2"
+
 [package]
 name = "rscapt"
 version = "0.1.15"

@@ -1,0 +1,42 @@
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --bg:           #0D0D0D;
+  --surface:      #141414;
+  --surface-alt:  #1A1A1A;
+  --border:       #222222;
+  --accent:       #E8501A;
+  --accent-dim:   #7A2810;
+  --accent-hover: #FF6A35;
+  --text:         #F0F0F0;
+  --text-secondary: #888888;
+  --text-muted:   #444444;
+  --green:        #4CAF50;
+  --red:          #E85252;
+  --yellow:       #E8C01A;
+
+  --font-ui:   "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+
+  --radius:   6px;
+  --radius-sm: 3px;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ── Scrollbars ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
