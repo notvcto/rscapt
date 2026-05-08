@@ -105,22 +105,13 @@ mod imp {
             .spawn();
     }
 
-    /// Spawn `rscapt tui` in Windows Terminal, falling back to a new console window.
+    /// Spawn `rscapt tui` in its own console window.
     fn spawn_tui() {
         let Ok(exe) = std::env::current_exe() else { return };
-        // Prefer Windows Terminal — WT_SESSION will be set automatically so
-        // setup_tui_console() won't loop. Fall back to conhost if wt unavailable.
-        let wt = std::process::Command::new("wt.exe")
-            .arg("--window").arg("new")
-            .arg(&exe).arg("tui")
-            .creation_flags(CREATE_NO_WINDOW)
+        let _ = std::process::Command::new(exe)
+            .arg("tui")
+            .creation_flags(CREATE_NEW_CONSOLE)
             .spawn();
-        if wt.is_err() {
-            let _ = std::process::Command::new(&exe)
-                .arg("tui")
-                .creation_flags(CREATE_NEW_CONSOLE)
-                .spawn();
-        }
     }
 
     /// Spawn `rscapt update` with its own console window.
