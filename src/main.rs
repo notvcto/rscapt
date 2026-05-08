@@ -69,10 +69,14 @@ fn attach_console() {}
 /// Falls back to a plain AllocConsole if wt.exe is not available.
 #[cfg(windows)]
 fn relaunch_in_wt_if_needed() -> bool {
+    // Guard: already inside WT (or spawned by tray into WT) — don't loop.
+    if std::env::var("RSCAPT_IN_WT").is_ok() {
+        return false;
+    }
     use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
     unsafe {
         if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
-            return false; // already running inside a terminal
+            return false; // already running inside a real terminal
         }
     }
     // No parent console — try Windows Terminal (--window new forces a separate window)
@@ -80,6 +84,7 @@ fn relaunch_in_wt_if_needed() -> bool {
     let ok = std::process::Command::new("wt.exe")
         .arg("--window").arg("new")
         .args(&args)
+        .env("RSCAPT_IN_WT", "1")
         .spawn()
         .is_ok();
     if ok {
